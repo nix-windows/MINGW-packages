@@ -1,0 +1,90 @@
+From f9c35fb50998d1c9d26293a18ade3d7c32f6ecb0 Mon Sep 17 00:00:00 2001
+From: Robert Hensing <robert@roberthensing.nl>
+Date: Mon, 2 Sep 2024 17:20:08 +0200
+Subject: [PATCH] Add git_mempack_write_thin_pack
+
+Unlike existing functions, this produces a _thin_ packfile by
+making use of the fact that only new objects appear in the
+mempack Object Database.
+
+A thin packfile only contains certain objects, but not its whole
+closure of references. This makes it suitable for efficiently
+writing sets of new objects to a local repository, by avoiding
+many small I/O operations.
+
+This relies on write_pack (e.g. git_packbuilder_write_buf) to
+implement the "recency order" optimization step.
+
+Basic measurements comparing against the writing of individual
+objects show a speedup during when writing large amounts of
+content on machines with comparatively slow I/O operations,
+and little to no change on machines with fast I/O operations.
+---
+ include/git2/sys/mempack.h | 19 +++++++++++++++++++
+ src/libgit2/odb_mempack.c  | 23 +++++++++++++++++++++++
+ 2 files changed, 42 insertions(+)
+
+diff --git a/include/git2/sys/mempack.h b/include/git2/sys/mempack.h
+index 17da590a383..96bd8a7e86e 100644
+--- a/include/git2/sys/mempack.h
++++ b/include/git2/sys/mempack.h
+@@ -44,6 +44,25 @@ GIT_BEGIN_DECL
+  */
+ GIT_EXTERN(int) git_mempack_new(git_odb_backend **out);
+ 
++/**
++ * Write a thin packfile with the objects in the memory store.
++ *
++ * A thin packfile is a packfile that does not contain its transitive closure of
++ * references. This is useful for efficiently distributing additions to a
++ * repository over the network, but also finds use in the efficient bulk
++ * addition of objects to a repository, locally.
++ *
++ * This operation performs the (shallow) insert operations into the
++ * `git_packbuilder`, but does not write the packfile to disk;
++ * see `git_packbuilder_write_buf`.
++ *
++ * It also does not reset the in-memory object database; see `git_mempack_reset`.
++ *
++ * @param backend The mempack backend
++ * @param pb The packbuilder to use to write the packfile
++ */
++GIT_EXTERN(int) git_mempack_write_thin_pack(git_odb_backend *backend, git_packbuilder *pb);
++
+ /**
+  * Dump all the queued in-memory writes to a packfile.
+  *
+diff --git a/src/libgit2/odb_mempack.c b/src/libgit2/odb_mempack.c
+index 6f27f45f870..fb4391f8dcf 100644
+--- a/src/libgit2/odb_mempack.c
++++ b/src/libgit2/odb_mempack.c
+@@ -132,6 +132,29 @@ static int git_mempack__dump(
+ 	return err;
+ }
+ 
++int git_mempack_write_thin_pack(git_odb_backend *backend, git_packbuilder *pb)
++{
++	struct memory_packer_db *db = (struct memory_packer_db *)backend;
++	const git_oid *oid;
++	size_t iter = 0;
++	int err;
++
++	while (true) {
++		err = git_oidmap_iterate(NULL, db->objects, &iter, &oid);
++
++		if (err == GIT_ITEROVER)
++			break;
++		else if (err != 0)
++			return err;
++
++		err = git_packbuilder_insert(pb, oid, NULL);
++		if (err != 0)
++			return err;
++	}
++
++	return 0;
++}
++
+ int git_mempack_dump(
+ 	git_buf *pack,
+ 	git_repository *repo,

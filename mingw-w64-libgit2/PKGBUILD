@@ -30,12 +30,14 @@ makedepends=(
 source=(${_realname}-${pkgver}.tar.gz::"https://github.com/libgit2/libgit2/archive/v${pkgver}.tar.gz"
         "0001-libgit2-1.4.2-rc-filename.patch"
         "0002-cmake-fix-openssl-build-on-win32.patch"
-        "0003-libgit2-cmake-fix-pkgconfig.patch")
+        "0003-libgit2-cmake-fix-pkgconfig.patch"
+        "f9c35fb50998d1c9d26293a18ade3d7c32f6ecb0.patch")
 noextract=(${_realname}-${pkgver}.tar.gz)
 sha256sums=('de384e29d7efc9330c6cdb126ebf88342b5025d920dcb7c645defad85195ea7f'
             'bdffd718bbf178817d5cfd80f9d5a9706b9c6ff981b1631978ae02657cbf2a55'
             '4329cef22a301adf67652ac00372e08077fe4dd005f7036751be413dda6ac156'
-            '0d7cff6db9a7d3f0ed63540a3a91365afeb43217787b0db8519c34fe73bc9757')
+            '0d7cff6db9a7d3f0ed63540a3a91365afeb43217787b0db8519c34fe73bc9757'
+            'c0bfa0742cedcdec5b8d65c49b106d817bdfdd55097cda003d08d9e69d5cb48f')
 
 prepare() {
   tar --exclude tests/resources/testrepo-worktree/link_to_new.txt -zxf ${_realname}-${pkgver}.tar.gz
@@ -46,6 +48,8 @@ prepare() {
   # https://github.com/libgit2/libgit2/pull/6626
   patch -Np1 -i "${srcdir}/0002-cmake-fix-openssl-build-on-win32.patch"
   patch -Np1 -i "${srcdir}/0003-libgit2-cmake-fix-pkgconfig.patch"
+
+  patch -Np1 -i "${srcdir}/f9c35fb50998d1c9d26293a18ade3d7c32f6ecb0.patch"
 }
 
 do_build() {
